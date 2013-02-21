@@ -55,7 +55,7 @@
 // G92 - Set current position to cordinates given
 
 //Personnal Code 
-//K : Start the running session
+//G5 : Start the running session
 
 //RepRap M Codes
 // M104 - Set extruder target temp
@@ -177,7 +177,7 @@ static unsigned long stoptime=0;
 
 static uint8_t tmp_extruder;
 
-int running_iteration_nbr=10;
+int running_iteration_nbr=100;
 
 
 //===========================================================================
@@ -291,6 +291,30 @@ void setup()
   wd_init();
   setup_photpin();
 }
+#define HOMEAXIS(LETTER) \
+  if ((LETTER##_MIN_PIN > -1 && LETTER##_HOME_DIR==-1) || (LETTER##_MAX_PIN > -1 && LETTER##_HOME_DIR==1))\
+    { \
+    current_position[LETTER##_AXIS] = 0; \
+    plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]); \
+    destination[LETTER##_AXIS] = 1.5 * LETTER##_MAX_LENGTH * LETTER##_HOME_DIR; \
+    feedrate = homing_feedrate[LETTER##_AXIS]; \
+    plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder); \
+    \
+    current_position[LETTER##_AXIS] = 0;\
+    plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);\
+    destination[LETTER##_AXIS] = -LETTER##_HOME_RETRACT_MM * LETTER##_HOME_DIR;\
+    plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder); \
+    \
+    destination[LETTER##_AXIS] = 2*LETTER##_HOME_RETRACT_MM * LETTER##_HOME_DIR;\
+    feedrate = homing_feedrate[LETTER##_AXIS]/2 ;  \
+    plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder); \
+    \
+    current_position[LETTER##_AXIS] = (LETTER##_HOME_DIR == -1) ? LETTER##_HOME_POS : LETTER##_MAX_LENGTH;\
+    destination[LETTER##_AXIS] = current_position[LETTER##_AXIS];\
+    feedrate = 0.0;\
+    st_synchronize();\
+    endstops_hit_on_purpose();\
+  }
 
 void running_motor_loop( char axe, int direction_start, int direction_end)
 {
@@ -298,27 +322,41 @@ void running_motor_loop( char axe, int direction_start, int direction_end)
 	for(i; i < running_iteration_nbr ; ++i)
 	{
 		//store the command into the command_buffer, and retreive strchr_pointer (needed by code_seen() and code_value() )
-		sprintf( cmdbuffer[bufindw],"G1 %c%i", axe, direction_start );
-		strchr_pointer = strchr(cmdbuffer[bufindw], 'K');
+		sprintf( cmdbuffer[bufindw],"G0 %c%i", axe, direction_start );
+		strchr_pointer = strchr(cmdbuffer[bufindw], 'G');
 		process_commands();
 		st_synchronize();
+		checkHitEndstops();
+		endstops_hit_on_purpose();	
 		
-		sprintf( cmdbuffer[bufindw],"G1 %c%i", axe, direction_end );
-		strchr_pointer = strchr(cmdbuffer[bufindw], 'K');
+		sprintf( cmdbuffer[bufindw],"G0 %c%i", axe, direction_end );
+		strchr_pointer = strchr(cmdbuffer[bufindw], 'G');
 		process_commands();
 		st_synchronize();
+		checkHitEndstops();
+		endstops_hit_on_purpose();
 	}
 }
 
 void process_running_command()
 {
-	SERIAL_PROTOCOLLNPGM("--->Starting...");
+	int start_offset = 5; //mm
+        SERIAL_ECHO_START;
+        SERIAL_ECHOPGM("---->Running....");
+        SERIAL_PROTOCOLLNPGM("...");
+	float prev_feedrate = feedrate;
+	feedrate = 3000.0; // mm/sec
 	//X
-	running_motor_loop( 'X', X_HOME_POS, X_MAX_LENGTH );
+        SERIAL_ECHOPGM("-> Running X axis...");
+	running_motor_loop( 'X', X_HOME_POS + start_offset, X_MAX_LENGTH );
 	//Y
-	running_motor_loop( 'Y', Y_HOME_POS, Y_MAX_LENGTH );
+        SERIAL_ECHOPGM("-> Running Y axis...");
+	running_motor_loop( 'Y', Y_HOME_POS + start_offset, Y_MAX_LENGTH );
 	//Z
-	running_motor_loop( 'Z', Z_HOME_POS, Z_MAX_LENGTH );
+        SERIAL_ECHOPGM("-> Running Z axis...");
+	running_motor_loop( 'Z', Z_HOME_POS + start_offset, Z_MAX_LENGTH );
+	feedrate = prev_feedrate;
+        SERIAL_ECHOPGM("=== End Running session ===");
 }
 
 
@@ -332,9 +370,11 @@ void loop()
   if(buflen)
   {
 	  // Start the running session.
-	if(strstr(cmdbuffer[bufindr],"K") == NULL)
+	if(strstr(cmdbuffer[bufindr],"G5") != NULL)
 	{
-		process_running_command();
+  	  buflen = (buflen-1);
+	  bufindr = (bufindr + 1)%BUFSIZE;
+	  process_running_command();
 	}
     #ifdef SDSUPPORT
       if(card.saving)
@@ -449,16 +489,13 @@ void get_command()
 	    #endif //SDSUPPORT
             SERIAL_PROTOCOLLNPGM("ok"); 
             break;
+          case 5:
+              SERIAL_ECHO_START;
+              SERIAL_ECHOPGM("*** Running session ****");
+            break;
           default:
             break;
           }
-        }
-        if ((strstr(cmdbuffer[bufindw], "K") != NULL)){
-          strchr_pointer = strchr(cmdbuffer[bufindw], 'K');
-          SERIAL_PROTOCOLLNPGM("*** Running session ****");
-          FlushSerialRequestResend();
-          serial_count = 0;
-          return;
         }
         bufindw = (bufindw + 1)%BUFSIZE;
         buflen += 1;
@@ -540,30 +577,6 @@ bool code_seen(char code)
   strchr_pointer = strchr(cmdbuffer[bufindr], code);
   return (strchr_pointer != NULL);  //Return True if a character was found
 }
-#define HOMEAXIS(LETTER) \
-  if ((LETTER##_MIN_PIN > -1 && LETTER##_HOME_DIR==-1) || (LETTER##_MAX_PIN > -1 && LETTER##_HOME_DIR==1))\
-    { \
-    current_position[LETTER##_AXIS] = 0; \
-    plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]); \
-    destination[LETTER##_AXIS] = 1.5 * LETTER##_MAX_LENGTH * LETTER##_HOME_DIR; \
-    feedrate = homing_feedrate[LETTER##_AXIS]; \
-    plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder); \
-    \
-    current_position[LETTER##_AXIS] = 0;\
-    plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);\
-    destination[LETTER##_AXIS] = -LETTER##_HOME_RETRACT_MM * LETTER##_HOME_DIR;\
-    plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder); \
-    \
-    destination[LETTER##_AXIS] = 2*LETTER##_HOME_RETRACT_MM * LETTER##_HOME_DIR;\
-    feedrate = homing_feedrate[LETTER##_AXIS]/2 ;  \
-    plan_buffer_line(destination[X_AXIS], destination[Y_AXIS], destination[Z_AXIS], destination[E_AXIS], feedrate/60, active_extruder); \
-    \
-    current_position[LETTER##_AXIS] = (LETTER##_HOME_DIR == -1) ? LETTER##_HOME_POS : LETTER##_MAX_LENGTH;\
-    destination[LETTER##_AXIS] = current_position[LETTER##_AXIS];\
-    feedrate = 0.0;\
-    st_synchronize();\
-    endstops_hit_on_purpose();\
-  }
 
 void process_commands()
 {

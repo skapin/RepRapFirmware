@@ -144,9 +144,9 @@ const bool Z_ENDSTOPS_INVERTING = false; // set to true to invert the logic of t
 
 #define min_software_endstops false //If true, axis won't move to coordinates less than zero.
 #define max_software_endstops true  //If true, axis won't move to coordinates greater than the defined lengths below.
-#define X_MAX_LENGTH 210 // for Orca 0.4 - 245, Orca 0.3 - 210, Orca 0.2 - 200
-#define Y_MAX_LENGTH 210 // for Orca 0.4 - 215, Orca 0.3 - 210, Orca 0.2 - 200
-#define Z_MAX_LENGTH 160 // for Orca 0.4 - 185, Orca 0.3 - 160, Orca 0.2 - 120
+#define X_MAX_LENGTH 180 // for Orca 0.4 - 245, Orca 0.3 - 210, Orca 0.2 - 200
+#define Y_MAX_LENGTH 190 // for Orca 0.4 - 215, Orca 0.3 - 210, Orca 0.2 - 200
+#define Z_MAX_LENGTH 80 // for Orca 0.4 - 185, Orca 0.3 - 160, Orca 0.2 - 120
 
 // The position of the homing switches. Use MAX_LENGTH * -0.5 if the center should be 0, 0, 0
 #define X_HOME_POS 0
