@@ -33,20 +33,20 @@
 # $Id$
 
 #For "old" Arduino Mega
-MCU = atmega1280
+#MCU = atmega1280
 #For Arduino Mega2560
 #MCU = atmega2560
 #For Sanguinololu
-#MCU = atmega644p 
+MCU = atmega644p 
 
 #Arduino install directory
-INSTALL_DIR = ../../arduino-0022/
+INSTALL_DIR = ../arduino-0023/
 
 F_CPU = 16000000
 
 UPLOAD_RATE = 115200
 AVRDUDE_PROGRAMMER = arduino
-PORT = /dev/arduino
+PORT = /dev/ttyUSB0
 
 TARGET = $(notdir $(CURDIR))
 

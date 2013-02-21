@@ -54,13 +54,16 @@
 // G91 - Use Relative Coordinates
 // G92 - Set current position to cordinates given
 
+//Personnal Code 
+//K : Start the running session
+
 //RepRap M Codes
 // M104 - Set extruder target temp
 // M105 - Read current temp
 // M106 - Fan on
 // M107 - Fan off
 // M109 - Wait for extruder current temp to reach target temp.
-// M114 - Display current position
+// M114 - Display current 
 
 //Custom M Codes
 // M17  - Enable/Power all stepper motors
@@ -173,6 +176,8 @@ static unsigned long starttime=0;
 static unsigned long stoptime=0;
 
 static uint8_t tmp_extruder;
+
+int running_iteration_nbr=10;
 
 
 //===========================================================================
@@ -287,6 +292,35 @@ void setup()
   setup_photpin();
 }
 
+void running_motor_loop( char axe, int direction_start, int direction_end)
+{
+	int i =0;
+	for(i; i < running_iteration_nbr ; ++i)
+	{
+		//store the command into the command_buffer, and retreive strchr_pointer (needed by code_seen() and code_value() )
+		sprintf( cmdbuffer[bufindw],"G1 %c%i", axe, direction_start );
+		strchr_pointer = strchr(cmdbuffer[bufindw], 'K');
+		process_commands();
+		st_synchronize();
+		
+		sprintf( cmdbuffer[bufindw],"G1 %c%i", axe, direction_end );
+		strchr_pointer = strchr(cmdbuffer[bufindw], 'K');
+		process_commands();
+		st_synchronize();
+	}
+}
+
+void process_running_command()
+{
+	SERIAL_PROTOCOLLNPGM("--->Starting...");
+	//X
+	running_motor_loop( 'X', X_HOME_POS, X_MAX_LENGTH );
+	//Y
+	running_motor_loop( 'Y', Y_HOME_POS, Y_MAX_LENGTH );
+	//Z
+	running_motor_loop( 'Z', Z_HOME_POS, Z_MAX_LENGTH );
+}
+
 
 void loop()
 {
@@ -297,6 +331,11 @@ void loop()
   #endif
   if(buflen)
   {
+	  // Start the running session.
+	if(strstr(cmdbuffer[bufindr],"K") == NULL)
+	{
+		process_running_command();
+	}
     #ifdef SDSUPPORT
       if(card.saving)
       {
@@ -413,7 +452,13 @@ void get_command()
           default:
             break;
           }
-
+        }
+        if ((strstr(cmdbuffer[bufindw], "K") != NULL)){
+          strchr_pointer = strchr(cmdbuffer[bufindw], 'K');
+          SERIAL_PROTOCOLLNPGM("*** Running session ****");
+          FlushSerialRequestResend();
+          serial_count = 0;
+          return;
         }
         bufindw = (bufindw + 1)%BUFSIZE;
         buflen += 1;
