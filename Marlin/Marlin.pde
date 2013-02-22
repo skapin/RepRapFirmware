@@ -177,7 +177,7 @@ static unsigned long stoptime=0;
 
 static uint8_t tmp_extruder;
 
-int running_iteration_nbr=100;
+int running_iteration_nbr=2;
 
 
 //===========================================================================
@@ -322,15 +322,15 @@ void running_motor_loop( char axe, int direction_start, int direction_end)
 	for(i; i < running_iteration_nbr ; ++i)
 	{
 		//store the command into the command_buffer, and retreive strchr_pointer (needed by code_seen() and code_value() )
-		sprintf( cmdbuffer[bufindw],"G0 %c%i", axe, direction_start );
-		strchr_pointer = strchr(cmdbuffer[bufindw], 'G');
+		sprintf( cmdbuffer[bufindr],"G0 %c%i", axe, direction_start );
+		strchr_pointer = strchr(cmdbuffer[bufindr], 'G');
 		process_commands();
 		st_synchronize();
 		checkHitEndstops();
 		endstops_hit_on_purpose();	
 		
-		sprintf( cmdbuffer[bufindw],"G0 %c%i", axe, direction_end );
-		strchr_pointer = strchr(cmdbuffer[bufindw], 'G');
+		sprintf( cmdbuffer[bufindr],"G0 %c%i", axe, direction_end );
+		strchr_pointer = strchr(cmdbuffer[bufindr], 'G');
 		process_commands();
 		st_synchronize();
 		checkHitEndstops();
@@ -343,6 +343,15 @@ void process_running_command()
 	int start_offset = 5; //mm
         SERIAL_ECHO_START;
         SERIAL_ECHOPGM("---->Running....");
+        
+        enable_endstops(true);
+        HOMEAXIS(X);
+        HOMEAXIS(Y);
+        HOMEAXIS(Z);
+        #ifdef ENDSTOPS_ONLY_FOR_HOMING
+          enable_endstops(false);
+        #endif
+        
         SERIAL_PROTOCOLLNPGM("...");
 	float prev_feedrate = feedrate;
 	feedrate = 3000.0; // mm/sec
@@ -357,6 +366,14 @@ void process_running_command()
 	running_motor_loop( 'Z', Z_HOME_POS + start_offset, Z_MAX_LENGTH );
 	feedrate = prev_feedrate;
         SERIAL_ECHOPGM("=== End Running session ===");
+        
+        enable_endstops(true);
+        HOMEAXIS(X);
+        HOMEAXIS(Y);
+        HOMEAXIS(Z);
+        #ifdef ENDSTOPS_ONLY_FOR_HOMING
+          enable_endstops(false);
+        #endif
 }
 
 
@@ -372,9 +389,8 @@ void loop()
 	  // Start the running session.
 	if(strstr(cmdbuffer[bufindr],"G5") != NULL)
 	{
-  	  buflen = (buflen-1);
-	  bufindr = (bufindr + 1)%BUFSIZE;
 	  process_running_command();
+          ClearToSend();
 	}
     #ifdef SDSUPPORT
       if(card.saving)
@@ -395,6 +411,7 @@ void loop()
 	process_commands();
       }
     #else
+    else
       process_commands();
     #endif //SDSUPPORT
     buflen = (buflen-1);
